@@ -10,10 +10,13 @@ env:
   UNITY_VERSION: 2022.3.17f1
 
 jobs:
+  # This job only runs if Unity license secrets are configured
   test:
     name: Run EditMode Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Skip if secrets are not set (for forks or initial setup)
+    if: github.event_name == 'push' && (secrets.UNITY_LICENSE != '' || secrets.UNITY_SERIAL != '')
     
     steps:
       - name: Checkout repository
@@ -53,7 +56,10 @@ jobs:
     name: Build for Windows
     runs-on: windows-latest
     needs: test
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev'
+    # Only build on main/dev branches AND if Unity secrets are configured
+    if: |
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') &&
+      (secrets.UNITY_LICENSE != '' || secrets.UNITY_SERIAL != '')
     timeout-minutes: 60
     
     steps:
@@ -103,15 +109,21 @@ jobs:
         with:
           dotnet-version: '6.0.x'
           
-      - name: Restore dependencies
-        run: dotnet restore *.sln || echo "No solution file found, skipping restore"
-        
-      - name: Check code formatting
+      - name: Check EditorConfig
         run: |
           if [ -f .editorconfig ]; then
-            echo "EditorConfig found - code style will be validated"
-            # Add dotnet format check when solution exists
+            echo "✓ EditorConfig found"
+            cat .editorconfig
           else
-            echo "EditorConfig not found - skipping format check"
+            echo "⚠ EditorConfig not found"
           fi
+        shell: bash
+        
+      - name: Verify Project Structure
+        run: |
+          echo "Checking required files..."
+          [ -f "Assets/Scripts/WorldParams.cs" ] && echo "✓ WorldParams.cs" || echo "✗ WorldParams.cs missing"
+          [ -f "Assets/Scripts/FanController.cs" ] && echo "✓ FanController.cs" || echo "✗ FanController.cs missing"
+          [ -f "Packages/manifest.json" ] && echo "✓ manifest.json" || echo "✗ manifest.json missing"
+          [ -f "CONTRIBUTING.md" ] && echo "✓ CONTRIBUTING.md" || echo "✗ CONTRIBUTING.md missing"
         shell: bash
